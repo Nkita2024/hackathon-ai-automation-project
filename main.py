@@ -3,19 +3,15 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import re, os, json
 from bs4 import BeautifulSoup
-import openai
 from playwright.sync_api import sync_playwright
 from fastapi.middleware.cors import CORSMiddleware
-
-# Load API key securely
-openai.api_key = os.getenv("OPENAI_API_KEY")
 
 app = FastAPI()
 results = []
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://your-frontend.vercel.app"],  # restrict to your frontend domain in production
+    allow_origins=["*"],  # restrict to your frontend domain in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -37,8 +33,8 @@ def scrape_site(url: str) -> dict:
 
         title = soup.title.string if soup.title else "N/A"
         emails = list(set(re.findall(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", html)))
-        phones = list(set(re.findall(r"\+?\d[\d\s-]{7,15}", html)))
-        addresses = list(set(re.findall(r"\d{1,5}\s\w+\s\w+.*", html)))[:1]
+        phones = list(set(re.findall(r"\+?\d{7,15}", html)))  # stricter phone regex
+        addresses = [tag.get_text() for tag in soup.find_all("address")]  # look for <address> tags
         text = " ".join([p.get_text() for p in soup.find_all("p")])
         text = re.sub(r"\s+", " ", text)[:2000]
 
@@ -70,45 +66,15 @@ def scrape_site(url: str) -> dict:
             "raw_text": f"Scraping failed: {str(e)}"
         }
 
-# --- AI Helper ---
+# --- AI Helper (Bypass Mode) ---
 def ai_enrich(text: str) -> dict:
-    if not text.strip():
-        return {
-            "core_service": "N/A",
-            "target_customer": "N/A",
-            "probable_pain_point": "N/A",
-            "outreach_opener": "N/A"
-        }
-
-    prompt = f"""
-    From the following company description, extract:
-    - core_service
-    - target_customer
-    - probable_pain_point
-    - outreach_opener (short personalized message)
-
-    Return JSON only.
-    Text: {text}
-    """
-
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0
-        )
-        raw_output = response.choices[0].message["content"]
-        print("AI raw output:", raw_output)
-
-        return json.loads(raw_output)
-    except Exception as e:
-        print("AI enrichment error:", e)
-        return {
-            "core_service": "N/A",
-            "target_customer": "N/A",
-            "probable_pain_point": "N/A",
-            "outreach_opener": "N/A"
-        }
+    # Temporary bypass: return placeholders instead of calling OpenAI
+    return {
+        "core_service": "Bypass mode",
+        "target_customer": "Bypass mode",
+        "probable_pain_point": "Bypass mode",
+        "outreach_opener": "Bypass mode"
+    }
 
 # --- API Endpoints ---
 class URLInput(BaseModel):
